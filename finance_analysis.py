@@ -20,7 +20,7 @@ class FinancialInstrument():
     :param start: The start date from which the stock prices shall be downloaded in format "YYYY-MM-DD"
     :param end: The end date till which the stock prices shall be downloaded in format "YYYY-MM-DD"
     """
-    def __init__(self,ticker: str,start: str,end: str,):
+    def __init__(self,ticker: str,start: str,end: str,interval: str):
         """
 
         :param ticker: The ticker of the stock whose price shall be downloaded. e.g. for Infosys India it would be "INFY.NS" where INFY is the name of the stock and NS is for NSE stock market.
@@ -31,6 +31,7 @@ class FinancialInstrument():
         self._ticker = ticker
         self.start = start
         self.end = end
+        self.interval = interval
         self.get_data()
         self.log_returns()
 
@@ -42,7 +43,7 @@ class FinancialInstrument():
         Downloads data from yfinance
         :return: A dataframe with price and log_returns columns of the ticker the class is initialized with.
         """
-        self.data = yf.download(self._ticker,self.start,self.end).Close.to_frame()
+        self.data = yf.download(self._ticker,self.start,self.end,interval=self.interval).Close.to_frame()
         self.data.rename(columns={'Close': 'price'},inplace = True)
 
     def log_returns(self):
