@@ -38,7 +38,7 @@ class Stock_Dataset(fi):
 
 
     def w_h(self,data,window,horizon):
-        data['position'] = np.log(data.price / data.price.shift(horizon)).apply(lambda x: x if x>=0 else -1)
+        data['position'] = np.log(data.price / data.price.shift(horizon)).apply(lambda x: 1 if x>=0 else -1)
         data.dropna(inplace=True)
         for i in range(1,window+1):
             col = f't-{i}'
