@@ -46,12 +46,13 @@ class FinancialInstrument():
         self.data = yf.download(self._ticker,self.start,self.end,interval=self.interval).Close.to_frame()
         self.data.rename(columns={'Close': 'price'},inplace = True)
 
-    def log_returns(self):
+    def log_returns(self,horizon=1):
         """
+        :param Horizon: Calcuate returns from horizon
         Adds a column log_returns to self.data which contains the daily log_returns of the
         stock price.
         """
-        self.data["log_returns"] = np.log(self.data.price/self.data.price.shift(1))
+        self.data["log_returns"] = np.log(self.data.price/self.data.price.shift(horizon))
 
     def plot_prices(self):
         """
