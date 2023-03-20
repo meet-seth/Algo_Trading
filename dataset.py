@@ -65,3 +65,58 @@ class Stock_Dataset(fi):
         return data_f
 
 
+class Stock_Dataset_2(fi):
+    def __init__(self,window,horizon,**kwargs):
+        super().__init__(**kwargs)
+        self.window = window
+        self.horizon = horizon
+        self.dataset = None
+
+    def create_dataset(self,qty=3):
+        self.qty=qty
+        signal_dict = {}
+        for i in range(len(self.data)-self.horizon):
+            price_on_day = self.data.price[i]
+            for j in range(1,self.horizon):
+                if f't+{j}' not in signal_dict.keys():
+                    signal_dict[f't+{j}'] = []
+                f_price = self.data.price.iloc[i+j]
+                turnover = self.qty*(f_price+price_on_day)
+                stt = round(0.1*turnover/100)
+                txn_nse = round(0.00345*turnover/100,2)
+                gst = round(18/100*txn_nse,2)
+                stamp = round(0.015/100*qty*self.data.price.iloc[i])
+                dp = 15.94
+                tax = stt+txn_nse+gst+stamp+dp
+                s_pnl = f_price - price_on_day
+                if s_pnl>0:
+                    pnl = s_pnl-tax
+                    if pnl>0:
+                        signal_dict[f't+{j}'].append(1)
+                    else:
+                        signal_dict[f't+{j}'].append(0)
+                else:
+                    pnl = s_pnl + tax
+                    if pnl>0:
+                        signal_dict[f't+{j}'].append(0)
+                    else:
+                        signal_dict[f't+{j}'].append(-1)
+
+
+        for i in signal_dict.keys():
+            self.data[i] = signal_dict[i]+[None]*self.horizon
+
+        for i in range(1,self.window+1):
+            self.data[f't-{i}'] = self.data.log_returns.shift(i)
+
+        key_ls = []
+        for k in range(-self.window,self.horizon):
+            if k==0:
+                key = 'log_returns'
+            else:
+                key = f't+{k}' if k>0 else f't{k}'
+            key_ls.append(key)
+
+        self.dataset = self.data[key_ls].dropna().copy()
+        return self.dataset
+
