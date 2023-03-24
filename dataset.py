@@ -66,13 +66,13 @@ class Stock_Dataset(fi):
 
 
 class Stock_Dataset_2(fi):
-    def __init__(self,window,horizon,**kwargs):
+    def __init__(self,**kwargs):
         super().__init__(**kwargs)
-        self.window = window
-        self.horizon = horizon
         self.dataset = None
 
-    def create_dataset(self,qty=3):
+    def create_dataset(self,qty=3,window=None,horizon=None):
+        self.window=window
+        self.horizon=horizon
         self.qty=qty
         signal_dict = {}
         for i in range(len(self.data)-self.horizon):
