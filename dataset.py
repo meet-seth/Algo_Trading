@@ -77,7 +77,7 @@ class Stock_Dataset_2(fi):
         signal_dict = {}
         for i in range(len(self.data)-self.horizon):
             price_on_day = self.data.price[i]
-            for j in range(1,self.horizon):
+            for j in range(1,self.horizon+1):
                 if f't+{j}' not in signal_dict.keys():
                     signal_dict[f't+{j}'] = []
                 f_price = self.data.price.iloc[i+j]
@@ -106,17 +106,35 @@ class Stock_Dataset_2(fi):
         for i in signal_dict.keys():
             self.data[i] = signal_dict[i]+[None]*self.horizon
 
-        for i in range(1,self.window+1):
+        for i in range(1,self.window):
             self.data[f't-{i}'] = self.data.log_returns.shift(i)
 
         key_ls = []
-        for k in range(-self.window,self.horizon):
+        for k in range(-self.window+1,self.horizon+1):
             if k==0:
                 key = 'log_returns'
             else:
                 key = f't+{k}' if k>0 else f't{k}'
             key_ls.append(key)
 
+        self.data[key_ls].dropna(inplace=True)
+
+        new_targets = []
+        target_ls = [f't+{i}' for i in range(1,self.horizon+1)]
+        target_array = self.data[target_ls].to_numpy().astype(np.int32)
+        for i in target_array:
+            n_zero = 0
+            for j in i:
+                if j!=0:
+                    n_zero=1
+                    new_targets.append(j)
+                    break
+            if n_zero==0:
+                new_targets.append(0)
+        self.data['final_targets'] = new_targets
+
+        key_ls = ['price'] + key_ls + ['final_targets']
         self.dataset = self.data[key_ls].dropna().copy()
         return self.dataset
+
 
