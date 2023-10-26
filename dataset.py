@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from itertools import product
+import talib
+from sklearn.preprocessing import minmax_scale
 
 class Stock_Dataset(fi):
     def __init__(self,windows: list,horizons: list,intercross: bool,lookover: bool,**kwargs):
@@ -136,5 +138,142 @@ class Stock_Dataset_2(fi):
         key_ls = ['price'] + key_ls + ['final_targets']
         self.dataset = self.data[key_ls].dropna().copy()
         return self.dataset
+
+class Stock_Dataset_Intraday(fi):
+    def __init__(self,windows,horizon,lookover,**kwargs):
+        '''
+        This class leverages Financial Instrument class to download data from yfinance and calculates
+        Technical Indicators. It windows them and the technical Indicators and returns the dataset.
+        The technical indicators calculated are:
+            * MACD: Moving Average Convergence and Divergence on the Close price with fast
+                    period = 12, slow period = 26 and signal period = 9
+            *
+
+        '''
+        super().__init__(**kwargs)
+        self.windows = windows
+        self.horizon =  horizon
+        self.lookover = lookover
+        self.windowed_dataset = None
+
+    def calculate_indicators(self):
+        '''
+        Calculates fixed indicators for selected stock instrument. The modification are made directly
+        to the data.
+        :return Returns the dataframe containing the technical indicators.
+        '''
+
+        # MACD
+        macd, macdsignal, macdhist = talib.MACD(self.data.Close)
+        self.data['MACD'] = macd
+        self.data['MACDSIGNAL'] = macdsignal
+        self.data['MACDHIST'] = macdhist
+
+        # ADX
+        adx = talib.ADX(self.data.High,self.data.Low,self.data.Close)
+        self.data['ADX'] = adx
+
+        # MFI
+        mfi = talib.MFI(self.data.High,self.data.Low,self.data.Close,self.data.Volume)
+        self.data['MFI'] = mfi
+
+        # OBV
+        obv = talib.OBV(self.data.Close,self.data.Volume)
+        self.data['OBV'] = obv
+
+        # RSI
+        rsi = talib.RSI(self.data.Close)
+        self.data['RSI'] = rsi
+
+        # Parabolic SAR
+        sar = talib.SAR(self.data.High,self.data.Low)
+        self.data['SAR'] = sar
+
+
+        return self.data
+
+    def preprocessing(self):
+        """
+        Preprocessing Pipeline:
+        1.) Volume - Min Max Scaling
+        2.) OHCL - Grouped Windowed Normalization
+        3.) MACD - MACD histogram polarization
+        4.) ADX - divide by 100
+        5.) RSI - divide by 100
+        6.) MFI - divide by 100
+        7.) OBV - polarization
+        8.) SAR - polarization
+        """
+
+        # Min Max Scaling the Volume
+        self.data.Volume = minmax_scale(self.data.Volume)
+
+        # ADX scaling
+        self.data.ADX /= 100
+
+        # RSI scaling
+        self.data.RSI /= 100
+
+        # MFI scaling
+        self.data.MFI /= 100
+
+        # OBV polarization
+        self.data['OBV'] = np.sign(self.data.OBV.shift(-1) - self.data.OBV)
+
+        # SAR polarization
+        self.data['SAR'].loc[self.data.SAR>=self.data.High] = 1
+        self.data['SAR'].loc[self.data.SAR<=self.data.Low] = -1
+
+        # MACD histogram polarization
+        self.data.MACDHIST = self.data.MACDHIST.shift(-1) - self.data.MACDHIST
+        self.data.MACDHIST = np.sign(self.data.MACDHIST.shift(-1) - self.data.MACDHIST)
+        self.data.drop('MACD',inplace=True,axis=1)
+        self.data.drop('MACDSIGNAL',inplace=True,axis=1)
+        self.data.drop('Adj Close',inplace=True,axis=1)
+
+
+
+
+
+    def windowing(self,data):
+        l = len(data)
+        s = l-self.windows
+        data = data.reset_index()
+        df_ls = []
+        keys = []
+        for i in range(self.windows):
+            keys.append(str(i))
+            df_ls.append(data.shift(-i))
+        mod_df = pd.concat(df_ls,keys=keys,axis=0).swaplevel().sort_index(axis=0,level=0)
+        return mod_df.loc[:s]
+
+    def window_dataset(self):
+        self.data.dropna(inplace=True)
+        if self.lookover:
+            p_data = self.data[self.data.index.normalize()!=self.data.index.normalize().unique()[0]]
+            for g in p_data.groupby(pd.Grouper(level='Datetime',freq='1D')):
+                if self.windowed_dataset is None:
+                    self.windowed_dataset = self.windowing(g[1])
+                else:
+                    wd = self.windowing(g[1])
+                    self.windowed_dataset = pd.concat([self.windowed_dataset,wd],axis=0)
+
+            self.windowed_dataset.reset_index(inplace=True)
+            for idx in range(0,len(self.windowed_dataset),self.windows):
+                ohcl = ["Open","High","Low","Close"]
+                wd = self.windowed_dataset.loc[idx:idx+self.windows-1,ohcl]
+                mn = wd.to_numpy().mean()
+                std = wd.to_numpy().std()
+                self.windowed_dataset.loc[idx:idx+self.windows-1,ohcl] = (self.windowed_dataset.loc[idx:idx+self.windows-1,ohcl] - mn) / std
+            # self.windowed_dataset.drop('level_0',axis=1,inplace=True)
+        else:
+            self.windowed_dataset = self.windowing(self.data)
+
+
+
+
+
+
+
 
 
