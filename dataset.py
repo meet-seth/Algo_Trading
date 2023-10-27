@@ -139,7 +139,7 @@ class Stock_Dataset_2(fi):
         self.dataset = self.data[key_ls].dropna().copy()
         return self.dataset
 
-class Stock_Dataset_Intraday(fi):
+class Stock_Instrument_Intraday(fi):
     def __init__(self,windows,horizon,lookover,**kwargs):
         '''
         This class leverages Financial Instrument class to download data from yfinance and calculates
@@ -155,6 +155,16 @@ class Stock_Dataset_Intraday(fi):
         self.horizon =  horizon
         self.lookover = lookover
         self.windowed_dataset = None
+        self.targets = None
+        print("Calculating Indicators...")
+        self.calculate_indicators()
+        print("Preprocessing the data...")
+        self.preprocessing()
+        print("Windowing the dataset.")
+        self.window_dataset()
+        print("Making Targets...")
+        self.make_targets()
+
 
     def calculate_indicators(self):
         '''
@@ -190,7 +200,14 @@ class Stock_Dataset_Intraday(fi):
         self.data['SAR'] = sar
 
 
-        return self.data
+    def make_targets(self):
+        self.targets = np.sign(self.data.Close.diff(self.horizon))
+        self.targets = self.targets[self.targets.index.normalize()!=self.targets.index.normalize().unique()[0]]
+        self.targets = self.targets.iloc[6:]
+        self.targets = self.targets.shift(-1)
+        dt_win = self.windowed_dataset.loc[self.windowed_dataset['level_1']=='6'].Datetime
+        self.targets = self.targets[dt_win]
+
 
     def preprocessing(self):
         """
@@ -270,10 +287,14 @@ class Stock_Dataset_Intraday(fi):
             self.windowed_dataset = self.windowing(self.data)
 
 
-
-
-
-
-
-
-
+    def to_numpy(self):
+        level_1 = self.windowed_dataset.level_1
+        level_0 = []
+        for j in range(int(len(level_1)/7)):
+            level_0+=[j]*7
+        level_1 = level_1.apply(pd.to_numeric)
+        data = self.windowed_dataset.drop(['Datetime','level_0','level_1'],axis=1)
+        shape = [len(np.unique(level_0)),len(np.unique(level_1)),len(data.columns)]
+        np_data = np.empty(shape=shape)
+        np_data[level_0,level_1.to_list()] = data.to_numpy()
+        return np_data
